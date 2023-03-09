@@ -520,7 +520,7 @@ program coupler_main
                          concurrent, do_concurrent_radiation, use_lag_fluxes,      &
                          check_stocks, restart_interval, do_debug, do_chksum,      &
                          use_hyper_thread, concurrent_ice, slow_ice_with_ocean,    &
-                         do_endpoint_chksum, combined_ice_and_ocean
+                         do_endpoint_chksum, combined_ice_and_ocean                          
 
   integer :: initClock, mainClock, termClock
 
@@ -682,13 +682,13 @@ program coupler_main
     ! With concurrent_ice, these only occur on the ocean PEs.
     if (Ice%slow_ice_PE .or. Ocean%is_ocean_pe) then
       ! If the slow ice is on a subset of the ocean PEs, use the ocean PElist.
-       call mpp_set_current_pelist(slow_ice_ocean_pelist)
+      call mpp_set_current_pelist(slow_ice_ocean_pelist)
       call mpp_clock_begin(newClock2)
        !Redistribute quantities from Ocean to Ocean_ice_boundary
        !Ice intent is In.
        !Ice is used only for accessing Ice%area and knowing if we are on an Ice pe
       call flux_ocean_to_ice( Time, Ocean, Ice, Ocean_ice_boundary )
-      Time_flux_ocean_to_ice = Time
+      Time_flux_ocean_to_ice = Time      
       call mpp_clock_end(newClock2)
 
       ! Update Ice_ocean_boundary; the first iteration is supplied by restarts
@@ -697,7 +697,7 @@ program coupler_main
         call flux_ice_to_ocean( Time, Ice, Ocean, Ice_ocean_boundary )
         Time_flux_ice_to_ocean = Time
         call mpp_clock_end(newClock3)
-      endif
+      endif 
     endif
 
     if (do_chksum) then
@@ -1052,14 +1052,16 @@ program coupler_main
 
       if (combined_ice_and_ocean) then
         call flux_ice_to_ocean_stocks(Ice)
-        call update_slow_ice_and_ocean(ice_ocean_driver_CS, Ice, Ocean_state, Ocean, &
-                      Ice_ocean_boundary, Time_ocean, Time_step_cpld )
-      else
-      if (do_chksum) call ocean_chksum('update_ocean_model-', nc, Ocean, Ice_ocean_boundary)
+        if (do_chksum) call ocean_chksum('CIO: update_ocean_model-', nc, Ocean, Ice_ocean_boundary)
       ! update_ocean_model since fluxes don't change here
+        call update_slow_ice_and_ocean(ice_ocean_driver_CS, Ice, Ocean_state, Ocean, &
+                      Ice_ocean_boundary, Ocean_ice_boundary, Time_ocean, Time_step_cpld )
+        else
+        if (do_chksum) call ocean_chksum('update_ocean_model-', nc, Ocean, Ice_ocean_boundary)
+        ! update_ocean_model since fluxes don't change here
 
-      if (do_ocean) &
-        call update_ocean_model( Ice_ocean_boundary, Ocean_state,  Ocean, &
+        if (do_ocean) &
+          call update_ocean_model( Ice_ocean_boundary, Ocean_state,  Ocean, &
                                  Time_ocean, Time_step_cpld )
       endif
 
@@ -1339,9 +1341,14 @@ contains
     Land%pe           = ANY(Land%pelist  .EQ. mpp_pe())
 
     Ice%shared_slow_fast_PEs = .not.slow_ice_with_ocean
+    ! However, if using a data atmosphere and slow_ice_with_ocean then shared_slow_fast_PEs
+    !! will be true. In this case, all procesors do the ocean, slow ice, and fast ice.
+    if (slow_ice_with_ocean.and.(.not.do_atmos)) Ice%shared_slow_fast_PEs = .true.
+    
+    
     ! This is where different settings would be applied if the fast and slow
     ! ice occurred on different PEs.
-    if (Ice%shared_slow_fast_PEs) then
+    if (Ice%shared_slow_fast_PEs.and.(.not.do_atmos)) then
       ! Fast and slow ice processes occur on the same PEs.
       allocate( Ice%pelist  (ice_npes) )
       Ice%pelist(:) = Ice%fast_pelist(:)
@@ -1351,7 +1358,7 @@ contains
          allocate(slow_ice_ocean_pelist(ocean_npes+ice_npes))
          slow_ice_ocean_pelist(1:ice_npes) = Ice%slow_pelist(:)
          slow_ice_ocean_pelist(ice_npes+1:ice_npes+ocean_npes) = Ocean%pelist(:)
-    else
+      else
          if(ice_npes .GE. ocean_npes) then
             allocate(slow_ice_ocean_pelist(ice_npes))
             slow_ice_ocean_pelist(:) = Ice%slow_pelist(:)
@@ -1360,7 +1367,7 @@ contains
             slow_ice_ocean_pelist(:) = Ocean%pelist(:)
          endif
       endif
-    else
+    elseif (slow_ice_with_ocean .and. do_atmos) then
       ! Fast ice processes occur a subset of the atmospheric PEs, while
       ! slow ice processes occur on the ocean PEs.
       allocate( Ice%slow_pelist(ocean_npes) )
@@ -1369,6 +1376,15 @@ contains
       ! Set Ice%pelist() to be the union of Ice%fast_pelist and Ice%slow_pelist.
       Ice%pelist(1:ice_npes) = Ice%fast_pelist(:)
       Ice%pelist(ice_npes+1:ice_npes+ocean_npes) = Ocean%pelist(:)
+      allocate(slow_ice_ocean_pelist(ocean_npes))
+      slow_ice_ocean_pelist(:) = Ocean%pelist(:)
+    elseif (slow_ice_with_ocean .and. (.not.do_atmos)) then
+      ! Both fast ice and slow ice processes occur on the same PEs,
+      ! since the Atmos and Ocean PEs are shared 
+      allocate( Ice%slow_pelist(ocean_npes) )
+      Ice%slow_pelist(:) = Ocean%pelist(:)
+      allocate( Ice%pelist  (ice_npes) ) 
+      Ice%pelist(1:ice_npes) = Ice%fast_pelist(:)
       allocate(slow_ice_ocean_pelist(ocean_npes))
       slow_ice_ocean_pelist(:) = Ocean%pelist(:)
     endif
@@ -1436,7 +1452,7 @@ contains
       if (ocean_npes .gt. 0) then
         write( text,'(a,2i6,a,i2.2)' )'Ocean PE range: ', Ocean%pelist(1), Ocean%pelist(ocean_npes), &
              ' ens_', ensemble_id
-        call mpp_error( NOTE, 'coupler_init: '//trim(text) )
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )       
       else
         write( text,'(a,i2.2)' )'Ocean PE range is not set (do_ocean=.false. and concurrent=.false.) for ens_', &
               ensemble_id
@@ -1445,10 +1461,35 @@ contains
       write( text,'(a,2i6,a,i2.2)' )'Land PE range: ', Land%pelist(1)  , Land%pelist(land_npes)  ,&
            ' ens_', ensemble_id
       call mpp_error( NOTE, 'coupler_init: '//trim(text) )
-      write( text,'(a,2i6,a,i2.2)' )'Ice PE range: ', Ice%pelist(1), Ice%pelist(ice_npes), &
-           ' ens_', ensemble_id
-      call mpp_error( NOTE, 'coupler_init: '//trim(text) )
 
+      if (.not.concurrent_ice) then
+        write( text,'(a,2i6,a,i2.2)' )'Ice PE range: ', Ice%pelist(1), Ice%pelist(ice_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )            
+      elseif (concurrent_ice .and. do_atmos) then      
+        write( text,'(a,2i6,a,i2.2)' )'Ice PE range: ', Ice%pelist(1), Ice%pelist(ice_npes+ocean_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )              
+        call mpp_error( NOTE, 'coupler_init: Running with CONCURRENT ICE coupling.' )
+        write( text,'(a,2i6,a,i2.2)' )'slow Ice PE range: ', Ice%slow_pelist(1), Ice%slow_pelist(ocean_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )         
+        write( text,'(a,2i6,a,i2.2)' )'fast Ice PE range: ', Ice%fast_pelist(1), Ice%fast_pelist(ice_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )      
+      elseif(concurrent_ice .and. (.not.do_atmos)) then        
+        write( text,'(a,2i6,a,i2.2)' )'Ice PE range: ', Ice%pelist(1), Ice%pelist(ice_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )        
+        call mpp_error( NOTE, 'coupler_init: Running with CONCURRENT ICE coupling.' )
+        write( text,'(a,2i6,a,i2.2)' )'slow Ice PE range: ', Ice%slow_pelist(1), Ice%slow_pelist(ocean_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )          
+        write( text,'(a,2i6,a,i2.2)' )'fast Ice PE range: ', Ice%fast_pelist(1), Ice%fast_pelist(ice_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )
+      endif
+    
       if (concurrent) then
         call mpp_error( NOTE, 'coupler_init: Running with CONCURRENT coupling.' )
 
@@ -1497,7 +1538,8 @@ contains
     if (Atm%pe) then
       call mpp_set_current_pelist(Atm%pelist)
       if (atmos_npes /= npes) diag_model_subset = DIAG_OTHER  ! change diag_model_subset from DIAG_ALL
-    elseif (Ocean%is_ocean_pe) then  ! Error check above for disjoint pelists should catch any problem
+    endif
+    if (Ocean%is_ocean_pe) then  ! Error check above for disjoint pelists should catch any problem
       call mpp_set_current_pelist(Ocean%pelist)
       ! The FMS diag manager has a convention that segregates files with "ocean"
       ! in their names from the other files to handle long diag tables.  This
@@ -1705,9 +1747,11 @@ contains
     if (Ice%pe) then  ! This occurs for all fast or slow ice PEs.
       if (Ice%fast_ice_pe) then
         call mpp_set_current_pelist(Ice%fast_pelist)
-      elseif (Ice%slow_ice_pe) then
+      endif
+      if (Ice%slow_ice_pe) then
         call mpp_set_current_pelist(Ice%slow_pelist)
-      else
+      endif
+      if ((.not.Ice%slow_ice_pe).and.(.not.Ice%fast_ice_pe)) then
         call mpp_error(FATAL, "All Ice%pes must be a part of Ice%fast_ice_pe or Ice%slow_ice_pe")
       endif
       if (mpp_pe().EQ.mpp_root_pe()) then
@@ -1718,6 +1762,7 @@ contains
       call mpp_clock_begin(id_ice_model_init)
       call ice_model_init(Ice, Time_init, Time, Time_step_atmos, &
                            Time_step_cpld, Verona_coupler=.false., &
+                          concurrent_atm=concurrent, &
                           concurrent_ice=concurrent_ice, &
                           gas_fluxes=gas_fluxes, gas_fields_ocn=gas_fields_ocn )
       call mpp_clock_end(id_ice_model_init)
