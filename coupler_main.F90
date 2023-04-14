@@ -1073,7 +1073,7 @@ program coupler_main
       if (combined_ice_and_ocean) then
         call flux_ice_to_ocean_stocks(Ice)
         call update_slow_ice_and_ocean(ice_ocean_driver_CS, Ice, Ocean_state, Ocean, &
-                      Ice_ocean_boundary, Time_ocean, Time_step_cpld )
+                      Ice_ocean_boundary, Ocean_ice_boundary, Time_ocean, Time_step_cpld )
       else
       if (do_chksum) call ocean_chksum('update_ocean_model-', nc, Ocean, Ice_ocean_boundary)
       ! update_ocean_model since fluxes don't change here
@@ -1532,9 +1532,34 @@ contains
       write( text,'(a,2i6,a,i2.2)' )'Land PE range: ', Land%pelist(1)  , Land%pelist(land_npes)  ,&
            ' ens_', ensemble_id
       call mpp_error( NOTE, 'coupler_init: '//trim(text) )
-      write( text,'(a,2i6,a,i2.2)' )'Ice PE range: ', Ice%pelist(1), Ice%pelist(ice_npes), &
-           ' ens_', ensemble_id
-      call mpp_error( NOTE, 'coupler_init: '//trim(text) )
+
+      if (.not.concurrent_ice) then
+        write( text,'(a,2i6,a,i2.2)' )'Ice PE range: ', Ice%pelist(1), Ice%pelist(ice_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )            
+      elseif (concurrent_ice .and. do_atmos) then      
+        write( text,'(a,2i6,a,i2.2)' )'Ice PE range: ', Ice%pelist(1), Ice%pelist(ice_npes+ocean_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )              
+        call mpp_error( NOTE, 'coupler_init: Running with CONCURRENT ICE coupling.' )
+        write( text,'(a,2i6,a,i2.2)' )'slow Ice PE range: ', Ice%slow_pelist(1), Ice%slow_pelist(ocean_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )         
+        write( text,'(a,2i6,a,i2.2)' )'fast Ice PE range: ', Ice%fast_pelist(1), Ice%fast_pelist(ice_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )      
+      elseif(concurrent_ice .and. (.not.do_atmos)) then        
+        write( text,'(a,2i6,a,i2.2)' )'Ice PE range: ', Ice%pelist(1), Ice%pelist(ice_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )        
+        call mpp_error( NOTE, 'coupler_init: Running with CONCURRENT ICE coupling.' )
+        write( text,'(a,2i6,a,i2.2)' )'slow Ice PE range: ', Ice%slow_pelist(1), Ice%slow_pelist(ocean_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )          
+        write( text,'(a,2i6,a,i2.2)' )'fast Ice PE range: ', Ice%fast_pelist(1), Ice%fast_pelist(ice_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )
+      endif
 
       if (concurrent) then
         call mpp_error( NOTE, 'coupler_init: Running with CONCURRENT coupling.' )
@@ -1805,7 +1830,8 @@ contains
       call mpp_clock_begin(id_ice_model_init)
       call ice_model_init(Ice, Time_init, Time, Time_step_atmos, &
                            Time_step_cpld, Verona_coupler=.false., &
-                          concurrent_ice=concurrent_ice, &
+                          concurrent_atm = concurrent, &
+                          concurrent_ice_in = concurrent_ice, &
                           gas_fluxes=gas_fluxes, gas_fields_ocn=gas_fields_ocn )
       call mpp_clock_end(id_ice_model_init)
 
