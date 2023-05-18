@@ -1053,7 +1053,7 @@ program coupler_main
       if (combined_ice_and_ocean) then
         call flux_ice_to_ocean_stocks(Ice)
         call update_slow_ice_and_ocean(ice_ocean_driver_CS, Ice, Ocean_state, Ocean, &
-                      Ice_ocean_boundary, Time_ocean, Time_step_cpld )
+                      Ice_ocean_boundary, Ocean_ice_boundary, Time_ocean, Time_step_cpld )
       else
       if (do_chksum) call ocean_chksum('update_ocean_model-', nc, Ocean, Ice_ocean_boundary)
       ! update_ocean_model since fluxes don't change here
@@ -1759,7 +1759,7 @@ contains
       call mpp_clock_begin(id_ice_model_init)
       call ice_model_init(Ice, Time_init, Time, Time_step_atmos, &
                            Time_step_cpld, Verona_coupler=.false., &
-                          Concurrent_atm_in=concurrent_atm, Concurrent_ice_in=concurrent_ice, &
+                          Concurrent_atm_in=concurrent, Concurrent_ice_in=concurrent_ice, &
                           gas_fluxes=gas_fluxes, gas_fields_ocn=gas_fields_ocn )
       call mpp_clock_end(id_ice_model_init)
 
