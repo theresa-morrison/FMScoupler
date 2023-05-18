@@ -682,7 +682,7 @@ program coupler_main
     ! With concurrent_ice, these only occur on the ocean PEs.
     if (Ice%slow_ice_PE .or. Ocean%is_ocean_pe) then
       ! If the slow ice is on a subset of the ocean PEs, use the ocean PElist.
-        call mpp_set_current_pelist(slow_ice_ocean_pelist)
+       call mpp_set_current_pelist(slow_ice_ocean_pelist)
       call mpp_clock_begin(newClock2)
        !Redistribute quantities from Ocean to Ocean_ice_boundary
        !Ice intent is In.
@@ -1052,10 +1052,12 @@ program coupler_main
 
       if (combined_ice_and_ocean) then
         call flux_ice_to_ocean_stocks(Ice)
-        ! update_ocean_model since fluxes don't change here
         call update_slow_ice_and_ocean(ice_ocean_driver_CS, Ice, Ocean_state, Ocean, &
                       Ice_ocean_boundary, Time_ocean, Time_step_cpld )
         else
+        if (do_chksum) call ocean_chksum('update_ocean_model-', nc, Ocean, Ice_ocean_boundary)
+        ! update_ocean_model since fluxes don't change here
+
         if (do_ocean) &
           call update_ocean_model( Ice_ocean_boundary, Ocean_state,  Ocean, &
                                  Time_ocean, Time_step_cpld )
@@ -1757,7 +1759,7 @@ contains
       call mpp_clock_begin(id_ice_model_init)
       call ice_model_init(Ice, Time_init, Time, Time_step_atmos, &
                            Time_step_cpld, Verona_coupler=.false., &
-                          concurrent_atm=concurrent, &
+                          Concurrent_atm_in=concurrent_atm, Concurrent_ice_in=concurrent_ice, &
                           gas_fluxes=gas_fluxes, gas_fields_ocn=gas_fields_ocn )
       call mpp_clock_end(id_ice_model_init)
 
