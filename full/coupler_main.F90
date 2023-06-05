@@ -1343,49 +1343,68 @@ contains
     ! will be true. In this case, all procesors do the ocean, slow ice, and fast ice.
     if (slow_ice_with_ocean.and.(.not.do_atmos)) Ice%shared_slow_fast_PEs = .true.
         
-    ! This is where different settings would be applied if the fast and slow
-    ! ice occurred on different PEs.
-    if (Ice%shared_slow_fast_PEs.and.(.not.do_atmos)) then
-      ! Fast and slow ice processes occur on the same PEs.
-      allocate( Ice%pelist  (ice_npes) )
-      Ice%pelist(:) = Ice%fast_pelist(:)
-      allocate( Ice%slow_pelist(ice_npes) )
-      Ice%slow_pelist(:) = Ice%fast_pelist(:)
-      if(concurrent) then
-         allocate(slow_ice_ocean_pelist(ocean_npes+ice_npes))
-         slow_ice_ocean_pelist(1:ice_npes) = Ice%slow_pelist(:)
-         slow_ice_ocean_pelist(ice_npes+1:ice_npes+ocean_npes) = Ocean%pelist(:)
-    else
-         if(ice_npes .GE. ocean_npes) then
-            allocate(slow_ice_ocean_pelist(ice_npes))
-            slow_ice_ocean_pelist(:) = Ice%slow_pelist(:)
-         else
-            allocate(slow_ice_ocean_pelist(ocean_npes))
-            slow_ice_ocean_pelist(:) = Ocean%pelist(:)
-         endif
+    if (do_atmos) then
+      if (Ice%shared_slow_fast_PEs) then
+        ! Fully coupled, no CIOD 
+        ! Fast and slow ice processes occur on the same PEs.
+        allocate( Ice%pelist  (ice_npes) )
+        Ice%pelist(:) = Ice%fast_pelist(:)
+        allocate( Ice%slow_pelist(ice_npes) )
+        Ice%slow_pelist(:) = Ice%fast_pelist(:)
+        if(concurrent) then
+          allocate(slow_ice_ocean_pelist(ocean_npes+ice_npes))
+          slow_ice_ocean_pelist(1:ice_npes) = Ice%slow_pelist(:)
+          slow_ice_ocean_pelist(ice_npes+1:ice_npes+ocean_npes) = Ocean%pelist(:)        
+        else
+          if(ice_npes .GE. ocean_npes) then
+             allocate(slow_ice_ocean_pelist(ice_npes))
+             slow_ice_ocean_pelist(:) = Ice%slow_pelist(:)
+          else
+             allocate(slow_ice_ocean_pelist(ocean_npes))
+             slow_ice_ocean_pelist(:) = Ocean%pelist(:)
+          endif
+        endif
+      else   
+        ! Fully coupled, with CIOD
+        ! Fast ice processes occur a subset of the atmospheric PEs, while
+        ! slow ice processes occur on the ocean PEs.
+        allocate( Ice%slow_pelist(ocean_npes) )
+        Ice%slow_pelist(:) = Ocean%pelist(:)
+        allocate( Ice%pelist  (ice_npes+ocean_npes) )
+        ! Set Ice%pelist() to be the union of Ice%fast_pelist and Ice%slow_pelist.
+        Ice%pelist(1:ice_npes) = Ice%fast_pelist(:)
+        Ice%pelist(ice_npes+1:ice_npes+ocean_npes) = Ocean%pelist(:)
+        allocate(slow_ice_ocean_pelist(ocean_npes))
+        slow_ice_ocean_pelist(:) = Ocean%pelist(:)
       endif
-    elseif (slow_ice_with_ocean .and. do_atmos) then
-      ! Fast ice processes occur a subset of the atmospheric PEs, while
-      ! slow ice processes occur on the ocean PEs.
-      allocate( Ice%slow_pelist(ocean_npes) )
-      Ice%slow_pelist(:) = Ocean%pelist(:)
-      allocate( Ice%pelist  (ice_npes+ocean_npes) )
-      ! Set Ice%pelist() to be the union of Ice%fast_pelist and Ice%slow_pelist.
-      Ice%pelist(1:ice_npes) = Ice%fast_pelist(:)
-      Ice%pelist(ice_npes+1:ice_npes+ocean_npes) = Ocean%pelist(:)
-      allocate(slow_ice_ocean_pelist(ocean_npes))
-      slow_ice_ocean_pelist(:) = Ocean%pelist(:)
-    elseif (slow_ice_with_ocean .and. (.not.do_atmos)) then
-      ! Both fast ice and slow ice processes occur on the same PEs,
-      ! since the Atmos and Ocean PEs are shared 
-      allocate( Ice%slow_pelist(ocean_npes) )
-      Ice%slow_pelist(:) = Ocean%pelist(:)
-      allocate( Ice%pelist  (ice_npes) ) 
-      Ice%pelist(1:ice_npes) = Ice%fast_pelist(:)
-      allocate(slow_ice_ocean_pelist(ocean_npes))
-      slow_ice_ocean_pelist(:) = Ocean%pelist(:)
-    endif
-
+    elseif (.not.do_atmos) then
+      ! In the data atmos cases, SSFPEs is not enough to distinguish the CIOD/non-CIOD options
+      if (slow_ice_with_ocean) then
+        ! data atmos, with CIOD
+        ! Both fast ice and slow ice processes occur on the same PEs,
+        ! since the Atmos and Ocean PEs are shared 
+        allocate( Ice%slow_pelist(ocean_npes) )
+        Ice%slow_pelist(:) = Ocean%pelist(:)
+        allocate( Ice%pelist  (ice_npes) ) 
+        Ice%pelist(1:ice_npes) = Ice%fast_pelist(:)
+        allocate(slow_ice_ocean_pelist(ocean_npes))
+        slow_ice_ocean_pelist(:) = Ocean%pelist(:)
+      else   
+        ! data atmos, no CIOD
+        allocate( Ice%pelist  (ice_npes) )
+        Ice%pelist(:) = Ice%fast_pelist(:)
+        allocate( Ice%slow_pelist(ice_npes) )
+        Ice%slow_pelist(:) = Ice%fast_pelist(:)
+        if(ice_npes .GE. ocean_npes) then
+           allocate(slow_ice_ocean_pelist(ice_npes))
+           slow_ice_ocean_pelist(:) = Ice%slow_pelist(:)
+        else
+           allocate(slow_ice_ocean_pelist(ocean_npes))
+           slow_ice_ocean_pelist(:) = Ocean%pelist(:)
+        endif
+      endif
+    endif        
+    
     Ice%fast_ice_pe = ANY(Ice%fast_pelist(:) .EQ. mpp_pe())
     Ice%slow_ice_pe = ANY(Ice%slow_pelist(:) .EQ. mpp_pe())
     Ice%pe = Ice%fast_ice_pe .OR. Ice%slow_ice_pe
