@@ -1053,7 +1053,7 @@ program coupler_main
       if (combined_ice_and_ocean) then
         call flux_ice_to_ocean_stocks(Ice)
         call update_slow_ice_and_ocean(ice_ocean_driver_CS, Ice, Ocean_state, Ocean, &
-                      Ice_ocean_boundary, Ocean_ice_boundary, Time_ocean, Time_step_cpld )
+                      Ice_ocean_boundary, Time_ocean, Time_step_cpld )
       else
       if (do_chksum) call ocean_chksum('update_ocean_model-', nc, Ocean, Ice_ocean_boundary)
       ! update_ocean_model since fluxes don't change here
@@ -1554,8 +1554,7 @@ contains
     if (Atm%pe) then
       call mpp_set_current_pelist(Atm%pelist)
       if (atmos_npes /= npes) diag_model_subset = DIAG_OTHER  ! change diag_model_subset from DIAG_ALL
-    endif
-    if (Ocean%is_ocean_pe) then  ! Error check above for disjoint pelists should catch any problem
+    elseif (Ocean%is_ocean_pe) then  ! Error check above for disjoint pelists should catch any problem
       call mpp_set_current_pelist(Ocean%pelist)
       ! The FMS diag manager has a convention that segregates files with "ocean"
       ! in their names from the other files to handle long diag tables.  This
@@ -1763,11 +1762,9 @@ contains
     if (Ice%pe) then  ! This occurs for all fast or slow ice PEs.
       if (Ice%fast_ice_pe) then
         call mpp_set_current_pelist(Ice%fast_pelist)
-      endif
-      if (Ice%slow_ice_pe) then
+      elseif (Ice%slow_ice_pe) then
         call mpp_set_current_pelist(Ice%slow_pelist)
-      endif
-      if ((.not.Ice%slow_ice_pe).and.(.not.Ice%fast_ice_pe)) then
+      else
         call mpp_error(FATAL, "All Ice%pes must be a part of Ice%fast_ice_pe or Ice%slow_ice_pe")
       endif
       if (mpp_pe().EQ.mpp_root_pe()) then
@@ -1778,9 +1775,9 @@ contains
       call mpp_clock_begin(id_ice_model_init)
       call ice_model_init(Ice, Time_init, Time, Time_step_atmos, &
                            Time_step_cpld, Verona_coupler=.false., &
-                          Concurrent_atm_in=concurrent, Concurrent_ice_in=concurrent_ice, &
+                          Concurrent_ice=concurrent, &
                           gas_fluxes=gas_fluxes, gas_fields_ocn=gas_fields_ocn )
-      call mpp_clock_end(id_ice_model_init)
+      call mpp_clock_end(id_ice_model_init)pwd
 
       ! This must be called using the union of the ice PE_lists.
       call mpp_set_current_pelist(Ice%pelist)
