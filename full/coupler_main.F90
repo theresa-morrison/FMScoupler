@@ -1351,7 +1351,7 @@ contains
          allocate(slow_ice_ocean_pelist(ocean_npes+ice_npes))
          slow_ice_ocean_pelist(1:ice_npes) = Ice%slow_pelist(:)
          slow_ice_ocean_pelist(ice_npes+1:ice_npes+ocean_npes) = Ocean%pelist(:)
-      else
+    else
          if(ice_npes .GE. ocean_npes) then
             allocate(slow_ice_ocean_pelist(ice_npes))
             slow_ice_ocean_pelist(:) = Ice%slow_pelist(:)
@@ -1372,7 +1372,7 @@ contains
       allocate(slow_ice_ocean_pelist(ocean_npes))
       slow_ice_ocean_pelist(:) = Ocean%pelist(:)
     endif
-    
+
     Ice%fast_ice_pe = ANY(Ice%fast_pelist(:) .EQ. mpp_pe())
     Ice%slow_ice_pe = ANY(Ice%slow_pelist(:) .EQ. mpp_pe())
     Ice%pe = Ice%fast_ice_pe .OR. Ice%slow_ice_pe
