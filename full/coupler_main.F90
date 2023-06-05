@@ -1339,10 +1339,6 @@ contains
     Land%pe           = ANY(Land%pelist  .EQ. mpp_pe())
 
     Ice%shared_slow_fast_PEs = .not.slow_ice_with_ocean
-    ! However, if using a data atmosphere and slow_ice_with_ocean then shared_slow_fast_PEs
-    ! will be true. In this case, all procesors do the ocean, slow ice, and fast ice.
-        
-    Ice%shared_slow_fast_PEs = .not.slow_ice_with_ocean
     ! This is where different settings would be applied if the fast and slow
     ! ice occurred on different PEs.
     if (Ice%shared_slow_fast_PEs) then
