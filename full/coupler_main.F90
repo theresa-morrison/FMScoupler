@@ -1445,10 +1445,35 @@ contains
       write( text,'(a,2i6,a,i2.2)' )'Land PE range: ', Land%pelist(1)  , Land%pelist(land_npes)  ,&
            ' ens_', ensemble_id
       call mpp_error( NOTE, 'coupler_init: '//trim(text) )
-      write( text,'(a,2i6,a,i2.2)' )'Ice PE range: ', Ice%pelist(1), Ice%pelist(ice_npes), &
-           ' ens_', ensemble_id
-      call mpp_error( NOTE, 'coupler_init: '//trim(text) )
-
+  
+      if (.not.concurrent_ice) then
+        write( text,'(a,2i6,a,i2.2)' )'Ice PE range: ', Ice%pelist(1), Ice%pelist(ice_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )            
+      elseif (concurrent_ice .and. do_atmos) then      
+        write( text,'(a,2i6,a,i2.2)' )'Ice PE range: ', Ice%pelist(1), Ice%pelist(ice_npes+ocean_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )              
+        call mpp_error( NOTE, 'coupler_init: Running with CONCURRENT ICE coupling.' )
+        write( text,'(a,2i6,a,i2.2)' )'slow Ice PE range: ', Ice%slow_pelist(1), Ice%slow_pelist(ocean_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )         
+        write( text,'(a,2i6,a,i2.2)' )'fast Ice PE range: ', Ice%fast_pelist(1), Ice%fast_pelist(ice_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )      
+      elseif(concurrent_ice .and. (.not.do_atmos)) then        
+        write( text,'(a,2i6,a,i2.2)' )'Ice PE range: ', Ice%pelist(1), Ice%pelist(ice_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )        
+        call mpp_error( NOTE, 'coupler_init: Running with CONCURRENT ICE coupling.' )
+        write( text,'(a,2i6,a,i2.2)' )'slow Ice PE range: ', Ice%slow_pelist(1), Ice%slow_pelist(ocean_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )          
+        write( text,'(a,2i6,a,i2.2)' )'fast Ice PE range: ', Ice%fast_pelist(1), Ice%fast_pelist(ice_npes), &
+             ' ens_', ensemble_id
+        call mpp_error( NOTE, 'coupler_init: '//trim(text) )
+      endif  
+  
       if (concurrent) then
         call mpp_error( NOTE, 'coupler_init: Running with CONCURRENT coupling.' )
 
